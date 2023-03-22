@@ -3,7 +3,7 @@ const router = express.Router();
 
 module.exports = (controller) => {
   router.post("/register", controller.createUser);
-  //   router.post("/register", controller.getTaskById);
+  router.post("/login", controller.logIn);
 
   return router;
 };

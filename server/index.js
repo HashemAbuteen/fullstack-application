@@ -27,13 +27,8 @@ app.use(
 
 // Import auth routes and set up API endpoints
 const authRoutes = require("./routes/authRoutes");
-const { createUser } = require("./controllers/authController");
-app.use(
-  "/auth",
-  authRoutes({
-    createUser,
-  })
-);
+const authController = require("./controllers/authController");
+app.use("/auth", authRoutes(authController));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
