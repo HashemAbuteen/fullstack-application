@@ -72,4 +72,13 @@ function requireAuth(req, res, next) {
   }
 }
 
-module.exports = { createUser, logIn, requireAuth };
+function logout(req, res, next) {
+  try {
+    res.clearCookie("token");
+    res.status(200).json({ message: "Logged out successfully" });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { createUser, logIn, requireAuth, logout };
