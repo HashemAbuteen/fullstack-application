@@ -1,14 +1,13 @@
-const { MongoClient } = require("mongodb");
 const { v4: uuidv4 } = require("uuid");
 const dotenv = require("dotenv").config();
+const client = require("../dbConfig/mongoClient");
 
-const uri = `mongodb+srv://hashemabualteen:${process.env.DB_PASS}@cluster0.1bssogr.mongodb.net/?retryWrites=true&w=majority`;
-const client = new MongoClient(uri, { useNewUrlParser: true });
+const dbName = process.env.DB_NAME;
 
 async function readTasksFromDB() {
   try {
     await client.connect();
-    const db = client.db("mydatabase");
+    const db = client.db(dbName);
     const tasks = await db.collection("tasks").find().toArray();
     return tasks;
   } catch (err) {
@@ -21,7 +20,7 @@ async function readTasksFromDB() {
 async function writeTasksToDB(tasks) {
   try {
     await client.connect();
-    const db = client.db("mydatabase");
+    const db = client.db(dbName);
     await db.collection("tasks").insertMany(tasks);
   } catch (err) {
     console.error(err);
@@ -59,7 +58,7 @@ async function getTaskById(req, res, next) {
     const taskId = req.params.id;
     const query = { id: taskId };
     await client.connect();
-    const db = client.db("mydatabase");
+    const db = client.db(dbName);
     const task = await db.collection("tasks").findOne(query);
     if (!task) {
       res.status(404).send("Task not found");
@@ -82,7 +81,7 @@ async function updateTaskById(req, res, next) {
       completed: req.body.completed,
     };
     await client.connect();
-    const db = client.db("mydatabase");
+    const db = client.db(dbName);
     const result = await db
       .collection("tasks")
       .updateOne(query, { $set: newTask });
@@ -103,7 +102,7 @@ async function deleteTaskById(req, res, next) {
     const taskId = req.params.id;
     const query = { id: taskId };
     await client.connect();
-    const db = client.db("mydatabase");
+    const db = client.db(dbName);
     const result = await db.collection("tasks").deleteOne(query);
     if (result.deletedCount === 0) {
       res.status(404).send("Task not found");

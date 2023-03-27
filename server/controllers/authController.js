@@ -1,53 +1,39 @@
-const fs = require("fs");
-const path = require("path");
 const jwt = require("jsonwebtoken");
-const dotenv = require("dotenv").config();
+const client = require("../dbConfig/mongoClient");
 
-const usersFilePath = path.join(__dirname, "../data/users.json");
+const dbName = process.env.DB_NAME;
 
-function readUsersFromFile() {
-  const fileContents = fs.readFileSync(usersFilePath, "utf-8");
-  return JSON.parse(fileContents);
-}
-
-function writeUsersToFile(users) {
-  fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2));
-}
-
-/**
- * POST /auth/register
- * Create a new user
- *
- * @param {object} body - The user object to create
- * @param {string} body.username - Username of the user
- * @param {boolean} body.password - password of the user
- * @returns {object} - The newly created task object
- */
-function createUser(req, res, next) {
-  console.log("creating a user ... ");
+async function createUser(req, res, next) {
   try {
-    const users = readUsersFromFile();
+    await client.connect();
+    const db = client.db(dbName);
+    const users = db.collection("users");
     const { username, password } = req.body;
+    const existingUser = await users.findOne({ username });
+    if (existingUser) {
+      res.status(400).json({ message: "Username already exists" });
+      return;
+    }
     const newUser = {
       username,
       password,
     };
-    users.push(newUser);
-    writeUsersToFile(users);
+    await users.insertOne(newUser);
     res.status(201).json({ username });
   } catch (err) {
     next(err);
+  } finally {
+    await client.close();
   }
 }
 
-function logIn(req, res, next) {
-  console.log("logging in a user... ");
+async function logIn(req, res, next) {
   try {
-    const users = readUsersFromFile();
+    await client.connect();
+    const db = client.db(dbName);
+    const users = db.collection("users");
     const { username, password } = req.body;
-    const user = users.find(
-      (user) => user.username === username && user.password === password
-    );
+    const user = await users.findOne({ username, password });
     if (user) {
       const token = jwt.sign({ username }, process.env.JWT_SECRET, {
         expiresIn: "1h",
@@ -62,7 +48,28 @@ function logIn(req, res, next) {
     }
   } catch (err) {
     next(err);
+  } finally {
+    await client.close();
   }
 }
 
-module.exports = { createUser, logIn };
+function requireAuth(req, res, next) {
+  try {
+    if (req.cookies && req.cookies.token) {
+      jwt.verify(req.cookies.token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+          res.status(401).json({ message: "Unauthorized: Invalid token" });
+        } else {
+          req.user = decoded;
+          next();
+        }
+      });
+    } else {
+      res.status(401).json({ message: "Unauthorized: Missing token" });
+    }
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { createUser, logIn, requireAuth };
