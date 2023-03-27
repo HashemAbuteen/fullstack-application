@@ -1,132 +1,126 @@
-const fs = require("fs");
-const path = require("path");
+const { MongoClient } = require("mongodb");
+const { v4: uuidv4 } = require("uuid");
+const dotenv = require("dotenv").config();
 
-const tasksFilePath = path.join(__dirname, "../data/tasks.json");
+const uri = `mongodb+srv://hashemabualteen:${process.env.DB_PASS}@cluster0.1bssogr.mongodb.net/?retryWrites=true&w=majority`;
+const client = new MongoClient(uri, { useNewUrlParser: true });
 
-function readTasksFromFile() {
-  const fileContents = fs.readFileSync(tasksFilePath, "utf-8");
-  return JSON.parse(fileContents);
-}
-
-function writeTasksToFile(tasks) {
-  fs.writeFileSync(tasksFilePath, JSON.stringify(tasks, null, 2));
-}
-
-/**
- * GET /tasks
- * Get all tasks
- *
- * @returns {object[]} - An array of task objects
- */
-function getAllTasks(req, res, next) {
+async function readTasksFromDB() {
   try {
-    const tasks = readTasksFromFile();
-    res.json(tasks);
+    await client.connect();
+    const db = client.db("mydatabase");
+    const tasks = await db.collection("tasks").find().toArray();
+    return tasks;
   } catch (err) {
-    next(err);
+    console.error(err);
+  } finally {
+    await client.close();
   }
 }
 
-/**
- * GET /tasks/:id
- * Get a specific task by ID
- *
- * @param {number} id - The ID of the task to retrieve
- * @returns {object} - The task object
- */
-function getTaskById(req, res, next) {
+async function writeTasksToDB(tasks) {
   try {
-    const tasks = readTasksFromFile();
-    const task = tasks.find((task) => task.id === Number(req.params.id));
-    if (!task) {
-      res.status(404).send("Task not found");
-      return;
-    }
-    res.json(task);
+    await client.connect();
+    const db = client.db("mydatabase");
+    await db.collection("tasks").insertMany(tasks);
   } catch (err) {
-    next(err);
+    console.error(err);
+  } finally {
+    await client.close();
   }
 }
 
-/**
- * POST /tasks
- * Create a new task
- *
- * @param {object} body - The task object to create
- * @param {string} body.name - The name of the task
- * @param {boolean} body.completed - Whether the task is completed
- * @returns {object} - The newly created task object
- */
-function createTask(req, res, next) {
+async function createTask(req, res, next) {
   try {
-    const tasks = readTasksFromFile();
     const { name, completed } = req.body;
     const newTask = {
-      id: tasks.length + 1,
+      id: uuidv4(),
       name,
       completed,
     };
-    tasks.push(newTask);
-    writeTasksToFile(tasks);
+    await writeTasksToDB([newTask]);
     res.status(201).json(newTask);
   } catch (err) {
     next(err);
   }
 }
 
-/**
- * PUT /tasks/:id
- * Update an existing task by ID
- *
- * @param {number} id - The ID of the task to update
- * @param {object} body - The updated task object
- * @param {string} body.name - The updated name of the task
- * @param {boolean} body.completed - Whether the task is completed
- * @returns {object} - The updated task object
- */
-function updateTaskById(req, res, next) {
+async function getAllTasks(req, res, next) {
   try {
-    const tasks = readTasksFromFile();
-    const task = tasks.find((task) => task.id === Number(req.params.id));
+    const tasks = await readTasksFromDB();
+    res.json(tasks);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getTaskById(req, res, next) {
+  try {
+    const taskId = req.params.id;
+    const query = { id: taskId };
+    await client.connect();
+    const db = client.db("mydatabase");
+    const task = await db.collection("tasks").findOne(query);
     if (!task) {
       res.status(404).send("Task not found");
       return;
     }
-    task.name = req.body.name || task.name;
-    task.completed = req.body.completed || task.completed;
-    writeTasksToFile(tasks);
     res.json(task);
   } catch (err) {
     next(err);
+  } finally {
+    await client.close();
   }
 }
 
-/**
- * DELETE /tasks/:id
- * Delete a task by ID
- *
- * @param {number} id - The ID of the task to delete
- */
-function deleteTaskById(req, res, next) {
+async function updateTaskById(req, res, next) {
   try {
-    const tasks = readTasksFromFile();
-    const index = tasks.findIndex((task) => task.id === Number(req.params.id));
-    if (index === -1) {
+    const taskId = req.params.id;
+    const query = { id: taskId };
+    const newTask = {
+      name: req.body.name,
+      completed: req.body.completed,
+    };
+    await client.connect();
+    const db = client.db("mydatabase");
+    const result = await db
+      .collection("tasks")
+      .updateOne(query, { $set: newTask });
+    if (result.matchedCount === 0) {
       res.status(404).send("Task not found");
       return;
     }
-    tasks.splice(index, 1);
-    writeTasksToFile(tasks);
+    res.json(newTask);
+  } catch (err) {
+    next(err);
+  } finally {
+    await client.close();
+  }
+}
+
+async function deleteTaskById(req, res, next) {
+  try {
+    const taskId = req.params.id;
+    const query = { id: taskId };
+    await client.connect();
+    const db = client.db("mydatabase");
+    const result = await db.collection("tasks").deleteOne(query);
+    if (result.deletedCount === 0) {
+      res.status(404).send("Task not found");
+      return;
+    }
     res.sendStatus(204);
   } catch (err) {
     next(err);
+  } finally {
+    await client.close();
   }
 }
 
 module.exports = {
+  createTask,
   getAllTasks,
   getTaskById,
-  createTask,
   updateTaskById,
   deleteTaskById,
 };
