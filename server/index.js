@@ -1,11 +1,11 @@
 const express = require("express");
 const app = express();
 const dotenv = require("dotenv").config();
+const cookieParser = require("cookie-parser");
 
-// Middleware for parsing JSON requests and responses
+app.use(cookieParser());
 app.use(express.json());
 
-// Import task routes and set up API endpoints
 const taskRoutes = require("./routes/taskRoutes");
 const {
   getAllTasks,
@@ -25,14 +25,18 @@ app.use(
   })
 );
 
-// Error handling middleware
+const authRoutes = require("./routes/authRoutes");
+const authController = require("./controllers/authController");
+app.use("/auth", authRoutes(authController));
+
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send("Internal Server Error");
 });
 
-// Start server
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
+
+module.exports = app;
